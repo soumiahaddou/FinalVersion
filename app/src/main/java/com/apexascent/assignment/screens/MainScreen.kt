@@ -95,12 +95,10 @@ fun MainScreen(navigator: DestinationsNavigator) {
     AIDialog(
         showDialog = state.showDialog,
         onDismiss = {
-            viewModel.onEvent(MainScreenEvent.DismissDialog)
-            val result = state.userQuestion + "[With AI]" + "\nAI Interpretation:\n ${state.aiResponse}"
-            viewModel.onEvent(MainScreenEvent.SaveTarotResult(TarotResult(0, state.selectedCards, result, viewModel.getCurrentTime()), db.dao))},
+            viewModel.onEvent(MainScreenEvent.DismissDialog(db.dao))
+            },
         onContinue = {
-            val result = state.userQuestion + "[With AI]" + "\nAI Interpretation:\n ${state.aiResponse}"
-            viewModel.onEvent(MainScreenEvent.SaveTarotResult(TarotResult(0, state.selectedCards, result, viewModel.getCurrentTime()), db.dao))
+            viewModel.onEvent(MainScreenEvent.ContinueChat(db.dao))
             navigator.navigate(
                 ChatScreenDestination(state.userPrompt, state.aiResponse)
             )

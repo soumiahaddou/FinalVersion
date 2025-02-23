@@ -11,8 +11,9 @@ sealed class MainScreenEvent {
     data class SaveTarotResult(val tarotResult: TarotResult, val dao: TarotDao): MainScreenEvent()
     data class PlayAudio(val mediaPlayer: MediaPlayer): MainScreenEvent()
     data class StopAudio(val mediaPlayer: MediaPlayer): MainScreenEvent()
+    data class ContinueChat(val dao: TarotDao): MainScreenEvent()
     object ShuffleCards: MainScreenEvent()
     object ShowDialog: MainScreenEvent()
-    object DismissDialog: MainScreenEvent()
+    data class DismissDialog(val dao: TarotDao): MainScreenEvent()
     object FetchAIResponse: MainScreenEvent()
 }

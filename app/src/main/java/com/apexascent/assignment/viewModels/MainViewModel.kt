@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.apexascent.assignment.AI_integration.ChatResponse
 import com.apexascent.assignment.Events.MainScreenEvent
 import com.apexascent.assignment.States.MainScreenState
+import com.apexascent.assignment.database.TarotResult
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,11 +23,15 @@ class MainViewModel:ViewModel() {
 
     fun onEvent(event: MainScreenEvent){
         when(event){
-            MainScreenEvent.DismissDialog -> {
+            is MainScreenEvent.DismissDialog -> {
                 _mainState.update {
                     it.copy(
                         showDialog = false
                     )
+                }
+                viewModelScope.launch {
+                    val result = _mainState.value.userQuestion + "[With AI]" + "\nAI Interpretation:\n ${_mainState.value.aiResponse}"
+                    event.dao.saveResult(TarotResult(0,_mainState.value.selectedCards, result, getCurrentTime()))
                 }
             }
             MainScreenEvent.FetchAIResponse -> {
@@ -121,6 +126,19 @@ class MainViewModel:ViewModel() {
                     it.copy(
                         isPlaying = false
                     )
+                }
+            }
+
+            is MainScreenEvent.ContinueChat -> {
+                _mainState.update {
+                    it.copy(
+                        showDialog = false
+                    )
+                }
+                viewModelScope.launch {
+                    val result = _mainState.value.userQuestion + "[With AI]" + "\nAI Interpretation:\n ${_mainState.value.aiResponse}"
+                    event.dao.saveResult(TarotResult(0,_mainState.value.selectedCards, result, getCurrentTime()))
+
                 }
             }
         }
