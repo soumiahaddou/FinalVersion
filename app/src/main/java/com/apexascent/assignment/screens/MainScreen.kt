@@ -238,7 +238,7 @@ fun TarotCardItem(card: TarotCard, isSelected: Boolean, isShuffling: Boolean, on
     // Flip animation when selected
     val flipRotation by animateFloatAsState(
         targetValue = if (isSelected) 180f else 0f,
-        animationSpec = tween(durationMillis = 500, easing = LinearOutSlowInEasing)
+        animationSpec = tween(durationMillis = 500, easing = LinearOutSlowInEasing), label = ""
     )
     // Shuffle animation, we move each card by a random amount of pixel in each direction, the same with rotation
     val offsetX = remember { Animatable(0f) }

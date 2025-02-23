@@ -146,7 +146,7 @@ fun ResultCard(tarotResult: TarotResult, onClick:() ->Unit){
                         .padding(8.dp)
                         .size(100.dp)
                         .weight(1f) )
-                Image(painter = painterResource(tarotResult.result[0].cardId),
+                Image(painter = painterResource(tarotResult.result[2].cardId),
                     contentDescription = "Tarot Card",
                     modifier = Modifier
                         .padding(8.dp)
