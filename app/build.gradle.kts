@@ -83,6 +83,12 @@ dependencies {
     //Gson
     implementation (libs.gson)
 
+    //AI Client dependency
+    implementation(libs.generativeai)
+
+    //Jetpack compose viewmodel
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+
 
 
 

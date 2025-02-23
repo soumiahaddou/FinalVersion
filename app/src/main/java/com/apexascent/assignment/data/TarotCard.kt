@@ -5,6 +5,7 @@ import kotlinx.parcelize.Parcelize
 
 @Parcelize
 data class TarotCard(
-    val imageId: Int,
-    val imageMeaning: List<String>
+    val cardId: Int,
+    val cardName: String,
+    val cardMeaning: List<String>
 ): Parcelable

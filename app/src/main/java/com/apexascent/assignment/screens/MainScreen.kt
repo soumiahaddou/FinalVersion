@@ -18,28 +18,30 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -48,28 +50,30 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.room.Room
+import com.apexascent.assignment.Events.MainScreenEvent
 import com.apexascent.assignment.R
 import com.apexascent.assignment.data.TarotCard
 import com.apexascent.assignment.database.TarotDatabase
 import com.apexascent.assignment.database.TarotResult
+import com.apexascent.assignment.screens.destinations.ChatScreenDestination
 import com.apexascent.assignment.screens.destinations.HistoryScreenDestination
 import com.apexascent.assignment.screens.destinations.ResultsScreenDestination
 import com.apexascent.assignment.screens.effects.FloatingStars
-import com.apexascent.assignment.util.Constants
+import com.apexascent.assignment.ui.theme.Beige
+import com.apexascent.assignment.ui.theme.Pink40
+import com.apexascent.assignment.ui.theme.Purple80
+import com.apexascent.assignment.viewModels.MainViewModel
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+
 @Destination(start = true)
 @Composable
 fun MainScreen(navigator: DestinationsNavigator) {
-    // Getting the tarot deck from our constants object
-    var tarotDeck by remember { mutableStateOf(Constants.tarotDeck.shuffled()) }
-
+    val viewModel = viewModel<MainViewModel>()
+    val state by viewModel.mainState.collectAsState()
     // Creating a database instance
     val context = LocalContext.current
     val db = remember {
@@ -78,35 +82,40 @@ fun MainScreen(navigator: DestinationsNavigator) {
             TarotDatabase::class.java, "tarot_result_database"
         ).build()
     }
-
-    //Creating the coroutine scope to run the database suspend functions
-    val scope = rememberCoroutineScope()
-    var userQuestion by remember { mutableStateOf("") }
-    var selectedCards by remember { mutableStateOf<List<TarotCard>>(emptyList()) }
-    var isShuffling by remember { mutableStateOf(false) }
-
     // Creating sound-related variables
-    var isPlaying by remember { mutableStateOf(false) }
     val mediaPlayer = remember { MediaPlayer.create(context, R.raw.mysterious) }
     // Set the MediaPlayer to loop indefinitely
     mediaPlayer.isLooping = true
-
     // Handle MediaPlayer lifecycle
     DisposableEffect(Unit) {
         onDispose {
             mediaPlayer.release() // Release MediaPlayer when the composable is removed
         }
     }
+    AIDialog(
+        showDialog = state.showDialog,
+        onDismiss = {
+            viewModel.onEvent(MainScreenEvent.DismissDialog)
+            val result = state.userQuestion + "[With AI]" + "\nAI Interpretation:\n ${state.aiResponse}"
+            viewModel.onEvent(MainScreenEvent.SaveTarotResult(TarotResult(0, state.selectedCards, result, viewModel.getCurrentTime()), db.dao))},
+        onContinue = {
+            val result = state.userQuestion + "[With AI]" + "\nAI Interpretation:\n ${state.aiResponse}"
+            viewModel.onEvent(MainScreenEvent.SaveTarotResult(TarotResult(0, state.selectedCards, result, viewModel.getCurrentTime()), db.dao))
+            navigator.navigate(
+                ChatScreenDestination(state.userPrompt, state.aiResponse)
+            )
 
-
-
+        },
+        aiResponse = state.aiResponse ,
+        isLoading = state.isLoading
+    )
     //UI
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 brush = Brush.linearGradient(
-                    colors = listOf(Color(0xFF4B134F), Color(0xFFEFCEAD)), // Dark Purple to Beige
+                    colors = listOf(Pink40, Beige) // Dark Purple to Beige
                 )
             )
             .padding(16.dp),
@@ -132,76 +141,55 @@ fun MainScreen(navigator: DestinationsNavigator) {
                         .size(30.dp)
                         .clickable {
                             navigator.navigate(HistoryScreenDestination())
+                            //navigator.navigate(ChatScreenDestination())
                         })
                 Icon(
                     tint = Color.White,
-                    painter = painterResource(if(isPlaying) R.drawable.ic_sound_on else R.drawable.ic_sound_off ),
+                    painter = painterResource(if(state.isPlaying) R.drawable.ic_sound_on else R.drawable.ic_sound_off ),
                     contentDescription = "Sound",
                     modifier = Modifier
                         .size(30.dp)
                         .clickable {
-                            if (!isPlaying){
-                                mediaPlayer.start()
-                                isPlaying = true
+                            if (!state.isPlaying) {
+                                viewModel.onEvent(MainScreenEvent.PlayAudio(mediaPlayer))
+                            } else {
+                                viewModel.onEvent(MainScreenEvent.StopAudio(mediaPlayer))
                             }
-                            else {
-                                mediaPlayer.pause()
-                                isPlaying = false
-                            }
-
-
                         })
-
             }
-
-
         }
-
-
         OutlinedTextField(
-            value = userQuestion,
-            onValueChange = { userQuestion = it },
+            value = state.userQuestion,
+            onValueChange = { viewModel.onEvent(MainScreenEvent.UpdateUserQuestion(it)) },
             label = { Text("Enter your question") },
             modifier = Modifier.fillMaxWidth()
         )
-
         Spacer(modifier = Modifier.height(16.dp))
         Button(
             onClick = {
-                scope.launch {
-                    isShuffling = true
-                    repeat(5) { // Shuffle 5 times for effect
-                        tarotDeck = tarotDeck.shuffled()
-                        delay(500) // Delay between shuffles
-                    }
-                    isShuffling = false
-                }
+                viewModel.onEvent(MainScreenEvent.ShuffleCards)
             },
-            enabled = !isShuffling,
+            enabled =!state.isShuffling ,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Shuffle Cards")
         }
 
-        // Equivalent to RecyclerView in XML
         Box(modifier = Modifier.weight(1f)) {
             FloatingStars()
+            // Equivalent to RecyclerView in XML
 
             LazyVerticalGrid(
                 columns = GridCells.Fixed(4),
                 modifier = Modifier.fillMaxSize(1f)) {
-                items(items =tarotDeck, key = { card -> card.imageId }) { card ->
+                items(items =state.tarotDeck, key = { card -> card.cardId }) { card ->
                     // A holder for each TarotCard instance
                     TarotCardItem(
                         card = card,
-                        isSelected = selectedCards.contains(card),
-                        isShuffling = isShuffling,
+                        isSelected = state.selectedCards.contains(card),
+                        isShuffling = state.isShuffling,
                         onClick = {
-                            if (selectedCards.contains(card)) {
-                                selectedCards = selectedCards - card
-                            } else if (selectedCards.size < 3) {
-                                selectedCards = selectedCards + card
-                            }
+                            viewModel.onEvent(MainScreenEvent.SelectTarotCard(card))
                         }
                     )
                 }
@@ -209,25 +197,37 @@ fun MainScreen(navigator: DestinationsNavigator) {
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-
-        Button(modifier = Modifier
+        Row(modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 16.dp),
-            onClick = {
-                val currentTime = getCurrentTime()
-                scope.launch {
-                    db.dao.saveResult(TarotResult(0,selectedCards, userQuestion, currentTime))
-                }
-                navigator.navigate(ResultsScreenDestination(selectedCards[0], selectedCards[1], selectedCards[2]))
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(modifier = Modifier
+                .weight(1f),
+                onClick = {
+                    val currentTime = viewModel.getCurrentTime()
+                    viewModel.onEvent(MainScreenEvent.SaveTarotResult(TarotResult(0, state.selectedCards, state.userQuestion, currentTime), db.dao))
+                    navigator.navigate(ResultsScreenDestination(state.selectedCards[0], state.selectedCards[1], state.selectedCards[2],state.userQuestion) )
+                },
+                enabled = state.selectedCards.size == 3 && state.userQuestion.isNotEmpty()
+            ) {
+                Text("Reveal")
+            }
+            Button(modifier = Modifier
+                .weight(1f),
+                onClick = {
+                    viewModel.onEvent(MainScreenEvent.ShowDialog)
+                    viewModel.onEvent(MainScreenEvent.FetchAIResponse)
 
 
 
+                },
+                enabled = state.selectedCards.size == 3 && state.userQuestion.isNotEmpty()
+            ) {
+                Text("Reveal with AI")
+            }
 
-            },
-            enabled = selectedCards.size == 3 && userQuestion.isNotEmpty()
-        ) {
-            Text("Reveal & Continue")
         }
+
         Spacer(modifier = Modifier.height(16.dp))
 
     }
@@ -235,7 +235,7 @@ fun MainScreen(navigator: DestinationsNavigator) {
 //A simple UI desin for each tarot card.
 @Composable
 fun TarotCardItem(card: TarotCard, isSelected: Boolean, isShuffling: Boolean, onClick: () -> Unit) {
-    val cardDrawable = if (isSelected) card.imageId else R.drawable.card_backs
+    val cardDrawable = if (isSelected) card.cardId else R.drawable.card_backs
 
     // Flip animation when selected
     val flipRotation by animateFloatAsState(
@@ -245,14 +245,13 @@ fun TarotCardItem(card: TarotCard, isSelected: Boolean, isShuffling: Boolean, on
     // Shuffle animation, we move each card by a random amount of pixel in each direction, the same with rotation
     val offsetX = remember { Animatable(0f) }
     val offsetY = remember { Animatable(0f) }
-    val cardRotation = remember { Animatable(0f) } // This is added to make the cards rotate when moving horizontally and vertically
-
     LaunchedEffect(isShuffling) {
         if(isShuffling){
+
             launch {
                 offsetX.animateTo(
                     targetValue = (-100..100).random().toFloat(),
-                    animationSpec = tween(durationMillis =(300), easing = LinearOutSlowInEasing)
+                    animationSpec = tween(durationMillis =(500), easing = LinearOutSlowInEasing)
                 )
                 offsetX.animateTo(0f, animationSpec = tween(200)) // We come back to the initial position
             }
@@ -260,23 +259,15 @@ fun TarotCardItem(card: TarotCard, isSelected: Boolean, isShuffling: Boolean, on
             launch {
                 offsetY.animateTo(
                     targetValue = (-100..100).random().toFloat(),
-                    animationSpec = tween(durationMillis = (300), easing = LinearOutSlowInEasing)
+                    animationSpec = tween(durationMillis = (500), easing = LinearOutSlowInEasing)
                 )
                 offsetY.animateTo(0f, animationSpec = tween(200))
             }
 
-            launch {
-                cardRotation.animateTo(
-                    targetValue = (-180..180).random().toFloat(),
-                    animationSpec = tween(durationMillis = (300), easing = LinearOutSlowInEasing)
-                )
-                cardRotation.animateTo(0f, animationSpec = tween(200))
-            }
         }else {
             launch {
                 offsetX.animateTo(0f, animationSpec = tween(200))
                 offsetY.animateTo(0f, animationSpec = tween(200))
-                cardRotation.animateTo(0f, animationSpec = tween(200))
 
 
 
@@ -294,7 +285,6 @@ fun TarotCardItem(card: TarotCard, isSelected: Boolean, isShuffling: Boolean, on
             .size(100.dp)
             .clickable { onClick() }
             .offset(offsetX.value.dp, offsetY.value.dp)
-            .rotate(cardRotation.value)
             .graphicsLayer {
                 rotationY = flipRotation
             }
@@ -305,7 +295,52 @@ fun TarotCardItem(card: TarotCard, isSelected: Boolean, isShuffling: Boolean, on
             )
     )
 }
-fun getCurrentTime(): String {
-    val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
-    return dateFormat.format(Date())
+@Composable
+fun AIDialog(
+    showDialog: Boolean,
+    onDismiss: () -> Unit,
+    onContinue: () -> Unit,
+    aiResponse: String?,
+    isLoading: Boolean
+) {
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("AI Interpretation") },
+            text = {
+                if (isLoading) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Generating response...")
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .verticalScroll(rememberScrollState())
+                            .heightIn(max = 400.dp)
+                    ) {
+                        Text(aiResponse ?: "No response available")
+                    }
+                }
+            },
+            confirmButton = {
+                if (!isLoading) {
+                    Button(onClick = onContinue) {
+                        Text("Continue Chat")
+                    }
+                }
+            },
+            dismissButton = {
+                if (!isLoading) {
+                    Button(onClick = onDismiss) {
+                        Text("Skip")
+                    }
+                }
+            }
+        )
+    }
 }
